@@ -20,6 +20,7 @@ async def on_ready():
 @bot.command()
 @commands.is_owner()
 async def shutdown(ctx):
+    keep_alive.shutdown()
     await ctx.bot.close()
 
 
@@ -28,5 +29,6 @@ for file in os.listdir("cogs"):
         cog_name = file[:-3]
         bot.load_extension(f"cogs.{cog_name}")
 
-keep_alive.keep_alive()
-bot.run(os.getenv("BOT_TOKEN"))
+if __name__ == '__main__':
+    keep_alive.keep_alive()
+    bot.run(os.getenv("BOT_TOKEN"))

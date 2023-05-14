@@ -1,12 +1,13 @@
 from flask import Flask
-from threading import Thread
+from multiprocessing import Process
 
 app = Flask('')
+server = None
 
 
 @app.route('/')
 def main():
-    return 'Bot is aLive!'
+    return 'Bot is alive!'
 
 
 def run():
@@ -14,5 +15,11 @@ def run():
 
 
 def keep_alive():
-    server = Thread(target=run)
+    global server
+    server = Process(target=run)
     server.start()
+
+
+def shutdown():
+    global server
+    server.terminate()
