@@ -5,6 +5,7 @@ from core.any import CogExtension
 import random
 import json
 
+
 shop = [
     {"name": "Watch", "price": 8},
     {"name": "Laptop", "price": 87},
@@ -12,12 +13,13 @@ shop = [
     {"name": "PS5", "price": 690},
     {"name": "Cat", "price": 1000}
 ]
+shop_item = [x["name"] for x in shop]
 
 
 class Money(CogExtension):
-    @commands.command()
-    async def money(self, ctx):
-        user = ctx.author
+    @commands.slash_command(description="查詢錢包", dm_permission=False)
+    async def money(self, inter):
+        user = inter.author
         BankSys.open_account(user)
         users = BankSys.get_bank_data()
         wallet = users[str(user.id)]["wallet"]
@@ -26,132 +28,110 @@ class Money(CogExtension):
         embed.set_thumbnail(url=user.avatar)
         embed.add_field(name="Wallet", value=wallet, inline=True)
         embed.add_field(name="Bank", value=bank, inline=True)
-        await ctx.send(embed=embed)
+        await inter.response.send_message(embed=embed)
 
-    @commands.command()
-    async def market(self, ctx):
+    @commands.slash_command(description="查詢市場", dm_permission=False)
+    async def market(self, inter):
         embed = disnake.Embed(title="Market", colour=disnake.Color.blurple())
 
         for item in shop:
             name = item["name"]
             price = item["price"]
             embed.add_field(name=name, value=f"${price}", inline=False)
-        await ctx.send(embed=embed)
+        await inter.response.send_message(embed=embed)
 
-    @commands.command()
-    async def beg(self, ctx):
-        user = ctx.author
+    @commands.slash_command(description="跟別人乞討錢錢", dm_permission=False)
+    async def beg(self, inter):
+        user = inter.author
         BankSys.open_account(user)
         users = BankSys.get_bank_data()
 
         earning = random.randint(1, 100)
-        await ctx.send(f"某人給了你{earning}塊錢")
+        await inter.response.send_message(f"某人給了你{earning}塊錢")
         users[str(user.id)]["wallet"] += earning
 
         with open("json/bank.json", "w") as f:
             json.dump(users, f, indent=4)
 
-    @commands.command()
-    async def withdraw(self, ctx, amount=None):
-        BankSys.open_account(ctx.author)
-        if amount is None:
-            await ctx.send("請輸入數字")
-            return
-        balance = BankSys.get_user_bank_data(ctx.author)
-        amount = int(amount)
+    @commands.slash_command(description="提款", dm_permission=False)
+    async def withdraw(self, inter, amount: int = commands.Param(name="金額", gt=0)):
+        BankSys.open_account(inter.author)
+        balance = BankSys.get_user_bank_data(inter.author)
         if balance["bank"] < amount:
-            await ctx.send("你的銀行戶頭沒那麼多錢")
+            await inter.response.send_message("你的銀行戶頭沒那麼多錢")
             return
-        if amount < 0:
-            await ctx.send("負數???????")
-            return
-        BankSys.update_bank(ctx.author, amount, "wallet")
-        BankSys.update_bank(ctx.author, amount * -1, "bank")
-        await ctx.send(f"你提款了{amount}塊錢")
+        BankSys.update_bank(inter.author, amount, "wallet")
+        BankSys.update_bank(inter.author, amount * -1, "bank")
+        await inter.response.send_message(f"你提款了{amount}塊錢")
 
-    @commands.command()
-    async def deposit(self, ctx, amount=None):
-        BankSys.open_account(ctx.author)
-        if amount is None:
-            await ctx.send("請輸入數字")
+    @commands.slash_command(description="存款", dm_permission=False)
+    async def deposit(self, inter, amount: int = commands.Param(name="金額", gt=0)):
+        BankSys.open_account(inter.author)
+        balance = BankSys.get_user_bank_data(inter.author)
+        if balance["wallet"] < amount:
+            await inter.response.send_message("你的錢包沒那麼多錢")
             return
-        balance = BankSys.get_user_bank_data(ctx.author)
-        amount = int(amount)
-        if balance["bank"] < amount:
-            await ctx.send("你的錢包沒那麼多錢")
-            return
-        if amount < 0:
-            await ctx.send("負數???????")
-            return
-        BankSys.update_bank(ctx.author, amount * -1, "wallet")
-        BankSys.update_bank(ctx.author, amount, "bank")
-        await ctx.send(f"你存款了{amount}塊錢")
+        BankSys.update_bank(inter.author, amount * -1, "wallet")
+        BankSys.update_bank(inter.author, amount, "bank")
+        await inter.response.send_message(f"你存款了{amount}塊錢")
 
-    @commands.command()
-    async def remit(self, ctx, member: disnake.Member, amount=None):
-        BankSys.open_account(ctx.author)
+    @commands.slash_command(description="匯錢給別人", dm_permission=False)
+    async def remit(
+            self, inter,
+            member: disnake.Member = commands.Param(name="用戶"),
+            amount: int = commands.Param(name="金額", gt=0)
+    ):
+        BankSys.open_account(inter.author)
         BankSys.open_account(member)
-        if amount is None:
-            await ctx.send("請輸入數字")
-            return
-        balance = BankSys.get_user_bank_data(ctx.author)
-        if amount == "all":
-            amount = balance["bank"]
-        amount = int(amount)
-        if balance["bank"] < amount:
-            await ctx.send("你的銀行戶頭沒那麼多錢")
-            return
-        if amount < 0:
-            await ctx.send("負數???????")
-            return
-        BankSys.update_bank(ctx.author, amount * -1, "bank")
-        BankSys.update_bank(member, amount, "bank")
-        await ctx.send(f"<@{ctx.author.id}> 匯給了 <@{member.id}> {amount}塊錢")
 
-    @commands.command()
-    async def bag(self, ctx):
-        BankSys.open_account(ctx.author)
+        balance = BankSys.get_user_bank_data(inter.author)
+        if balance["bank"] < amount:
+            await inter.response.send_message("你的銀行戶頭沒那麼多錢")
+            return
+        BankSys.update_bank(inter.author, amount * -1, "bank")
+        BankSys.update_bank(member, amount, "bank")
+        await inter.response.send_message(f"<@{inter.author.id}> 匯給了 <@{member.id}> {amount}塊錢")
+
+    @commands.slash_command(description="查詢包包", dm_permission=False)
+    async def bag(self, inter):
+        BankSys.open_account(inter.author)
         users = BankSys.get_bank_data()
-        bag = users[str(ctx.author.id)]["bag"]
+        bag = users[str(inter.author.id)]["bag"]
         embed = disnake.Embed(title="Bag", color=0xFF5733)
-        embed.set_thumbnail(url=ctx.author.avatar)
+        embed.set_thumbnail(url=inter.author.avatar)
         for item in bag:
             name = item["item"]
             amount = item["amount"]
             embed.add_field(name=name, value=amount)
 
-        await ctx.send(embed=embed)
+        await inter.response.send_message(embed=embed)
 
-    @commands.command()
-    async def buy(self, ctx, item, amount=1):
-        BankSys.open_account(ctx.author)
-        result = buy_something(ctx.author, item, amount)
+    @commands.slash_command(description="買買買", dm_permission=False)
+    async def buy(
+            self, inter,
+            item: str = commands.Param(name="商品", choices=shop_item),
+            amount: int = commands.Param(name="數量", gt=0)
+    ):
+        BankSys.open_account(inter.author)
+        result = buy_something(inter.author, item, amount)
         if result[0] == False:
-            if result[1] == 1:
-                await ctx.send("沒有這個東西")
-                return
             if result[1] == 2:
-                await ctx.send(f"你錢包裡的錢不夠購買{amount}個{item}")
+                await inter.response.send_message(f"你錢包裡的錢不夠購買{amount}個{item}")
                 return
-        await ctx.send(f"你購買了{amount}個{item}")
+        await inter.response.send_message(f"你購買了{amount}個{item}")
 
 
 def buy_something(user, item_name, amount):
-    name = None
-    item_name = item_name.lower()
     for item in shop:
-        shop_item_name = item["name"].lower()
+        shop_item_name = item["name"]
         if item_name == shop_item_name:
-            name = item_name
             price = item["price"]
             break
-    if name is None:
-        return [False, 1]
     cost = price * amount
     users = BankSys.get_bank_data()
     balance = BankSys.get_user_bank_data(user)
     if balance["wallet"] < cost:
-        return [False, 2]
+        return [False, 1]
 
     count = 0
     exist = 0

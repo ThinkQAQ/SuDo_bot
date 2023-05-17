@@ -19,43 +19,44 @@ class Role(CogExtension):
         with open("json/role_msg.json", "w") as file:
             json.dump(role_msg_data, file, indent=4)
 
-    @commands.command()
-    async def set_role(self, ctx):
-        author = ctx.author
-        channel = ctx.channel
-        guild = ctx.guild
+    @commands.slash_command(description="設置反應身分組", dm_permission=False)
+    @commands.default_member_permissions(administrator=True)
+    async def set_role(self, inter):
+        author = inter.author
+        channel = inter.channel
+        guild = inter.guild
 
         def check(m):
             return m.channel == channel and m.author == author
 
         try:
-            await ctx.send("輸入要設定反應給予身分組的頻道ID")
+            await inter.response.send_message("輸入要設定反應給予身分組的頻道ID")
             channel_id = await self.bot.wait_for(Event.message, check=check, timeout=60)
-            await ctx.send("輸入要設定反應給予身分組的訊息ID")
+            await inter.followup.send("輸入要設定反應給予身分組的訊息ID")
             msg_id = await self.bot.wait_for(Event.message, check=check, timeout=60)
-            await ctx.send("輸入要設定反應給予身分組的表符(先輸入\\\\再按表符)")
+            await inter.followup.send("輸入要設定反應給予身分組的表符(先輸入\\\\再按表符)")
             emoji = await self.bot.wait_for(Event.message, check=check, timeout=60)
-            await ctx.send("輸入要設定反應給予身分組的身分組ID")
+            await inter.followup.send("輸入要設定反應給予身分組的身分組ID")
             role_id = await self.bot.wait_for(Event.message, check=check, timeout=60)
         except asyncio.TimeoutError:
-            await ctx.send("已超過時間,請重新輸入指令")
+            await inter.followup.send("已超過時間,請重新輸入指令")
             return
         channel_id = channel_id.content
         msg_channel = guild.get_channel(int(channel_id))
         if msg_channel is None:
-            await ctx.send("找不到頻道,請確認頻道ID是否輸入正確")
+            await inter.followup.send("找不到頻道,請確認頻道ID是否輸入正確")
             return
         msg_id = msg_id.content
         try:
             await msg_channel.fetch_message(int(msg_id))
         except disnake.NotFound:
-            await ctx.send("找不到訊息,請確認訊息ID是否正確")
+            await inter.followup.send("找不到訊息,請確認訊息ID是否正確")
             return
         except disnake.Forbidden:
-            await ctx.send("無法取得訊息,請確認機器人是否在該訊息的頻道有權限")
+            await inter.followup.send("無法取得訊息,請確認機器人是否在該訊息的頻道有權限")
             return
         except disnake.HTTPException:
-            await ctx.send("訊息檢索失敗")
+            await inter.followup.send("訊息檢索失敗")
             return
         emoji_id = emoji.content.split(":")[2]
         emoji_id = emoji_id[: -1]
@@ -73,7 +74,7 @@ class Role(CogExtension):
         role_id = role_id.content
         role = guild.get_role(int(role_id))
         if role is None:
-            await ctx.send("找不到身分組,請確認身分組ID是否正確")
+            await inter.followup.send("找不到身分組,請確認身分組ID是否正確")
             return
         # record data in global variable and write in json
         if str(guild.id) not in role_msg_data:
@@ -88,13 +89,16 @@ class Role(CogExtension):
             }
         )
         self.store_reaction_roles()
-        await ctx.send("新增成功")
+        await inter.followup.send("新增成功")
 
-    @commands.command()
-    async def list_role_msg(self, ctx):
-        guild = ctx.guild
+    @commands.slash_command(description="查詢有哪些反應身分組")
+    async def list_role_msg(self, inter):
+        guild = inter.guild
         with open("json/role_msg.json", "r") as f:
             data = json.load(f)
+        if str(guild.id) not in data:
+            await inter.response.send_message("目前沒有資料")
+            return
         data = data[str(guild.id)]
         max_page = len(data)
         now_page = 0
@@ -110,7 +114,7 @@ class Role(CogExtension):
             embed = disnake.Embed(title="Role message list",
                                   description="(" + str(now_page + 1) + "/" + str(max_page) + ")",
                                   color=0x00bfff)
-            embed.set_author(name=ctx.author, icon_url=ctx.author.avatar.url)
+            embed.set_author(name=inter.author, icon_url=inter.author.avatar.url)
             embed.add_field(name="Message link", value=link, inline=True)
             embed.add_field(name="Emoji", value=emoji, inline=False)
             embed.add_field(name="Role", value=role, inline=False)
@@ -142,7 +146,7 @@ class Role(CogExtension):
         view = ui.View()
         view.add_item(previous_btn)
         view.add_item(next_btn)
-        await ctx.send(embed=update_embed(), view=view)
+        await inter.response.send_message(embed=update_embed(), view=view)
 
     @commands.Cog.listener("on_raw_reaction_add")
     async def add_role(self, payload: disnake.RawReactionActionEvent):

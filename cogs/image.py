@@ -8,9 +8,9 @@ with open("json/item.json", 'r', encoding="utf8") as file:
 
 
 class Image(CogExtension):
-    @commands.command()
-    async def a(self, ctx):
-        await ctx.send(file=disnake.File(data["A"]))
+    @commands.slash_command(description="A", dm_permission=False)
+    async def a(self, inter):
+        await inter.response.send_message(file=disnake.File(data["A"]))
 
 
 def setup(bot):

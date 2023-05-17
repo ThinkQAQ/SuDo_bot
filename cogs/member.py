@@ -1,5 +1,5 @@
 import disnake
-from disnake import ui
+from disnake import ui, Event
 from disnake.ext import commands
 from core.any import CogExtension
 import json
@@ -16,19 +16,19 @@ class YesNoButton(ui.View):
 
     @ui.button(label="Yes", style=disnake.ButtonStyle.green, custom_id="y")
     async def yes_callback(self, button: ui.Button, interaction: disnake.Interaction):
-        await interaction.response.send_message("確認更改")
         another_button = [x for x in self.children if x.custom_id == "n"][0]
         button.disabled = True
         another_button.disabled = True
         self.value = True
+        await interaction.response.send_message("確認更改")
 
     @ui.button(label="No", style=disnake.ButtonStyle.red, custom_id="n")
     async def no_callback(self, button: ui.Button, interaction: disnake.Interaction):
-        await interaction.response.send_message("確認取消")
         another_button = [x for x in self.children if x.custom_id == "y"][0]
         button.disabled = True
         another_button.disabled = True
         self.value = False
+        await interaction.response.send_message("確認取消")
 
 
 class Member(CogExtension):
@@ -37,31 +37,34 @@ class Member(CogExtension):
         with open("json/member_welcome.json", "w") as f:
             json.dump(data, f, indent=4)
 
-    @commands.command()
-    async def avatar(self, ctx, user=None):
+    @commands.slash_command(description="取得成員頭像")
+    async def avatar(self, inter, user: disnake.Member = commands.Param(name="成員", default=None)):
         avatar_imgs = []
         if user is None:
-            avatar_imgs.append(await ctx.author.avatar.to_file())
-            if ctx.author.avatar.url != ctx.author.display_avatar.url:
-                avatar_imgs.append(await ctx.author.display_avatar.to_file())
-            await ctx.send(f"{ctx.author.name}的頭貼:", files=avatar_imgs)
+            avatar_imgs.append(await inter.author.avatar.to_file())
+            if inter.author.avatar.url != inter.author.display_avatar.url:
+                avatar_imgs.append(await inter.author.display_avatar.to_file())
+            await inter.response.send_message(f"{inter.author.name}的頭貼:", files=avatar_imgs)
         else:
-            guild = ctx.guild
-            user = guild.get_member(int(user[2:-1]))
             avatar_imgs.append(await user.avatar.to_file())
             if user.avatar.url != user.display_avatar.url:
                 avatar_imgs.append(await user.display_avatar.to_file())
-            await ctx.send(f"{user.name}的頭貼:", files=avatar_imgs)
+            await inter.response.send_message(f"{user.name}的頭貼:", files=avatar_imgs)
 
-    @commands.command()
-    @commands.has_permissions(administrator=True)
-    async def set_join_ch(self, ctx, channel_id: int):
-        guild = ctx.guild
+    @commands.slash_command(description="設定成員加入訊息頻道", dm_permission=False)
+    @commands.default_member_permissions(administrator=True)
+    async def set_join_ch(self, inter, channel_id: int = commands.Param(name="頻道id", large=True)):
+        guild = inter.guild
         answer = YesNoButton()
 
         if str(guild.id) in data:
+            def check(i: disnake.MessageInteraction):
+                return i.message.id == msg.id and i.author == inter.author
+
             if data[str(guild.id)]["member_join_channel"] != "":
-                await ctx.send("此伺服器已經設定過成員加入通知頻道\n是否要重新設置(y/n)", view=answer)
+                await inter.response.send_message("此伺服器已經設定過成員加入通知頻道\n是否要重新設置(y/n)", view=answer)
+                msg = await inter.original_response()
+                await self.bot.wait_for(Event.button_click, check=check)
                 if not answer.value:
                     return
             data[str(guild.id)]["member_join_channel"] = str(channel_id)
@@ -70,17 +73,25 @@ class Member(CogExtension):
             data[str(guild.id)] = {"member_join_channel": "", "member_remove_channel": ""}
             data[str(guild.id)]["member_join_channel"] = str(channel_id)
             self.store_channel_data()
-        await ctx.send("設置成功")
+        if inter.response.is_done():
+            await inter.followup.send("設置成功")
+        else:
+            await inter.response.send_message("設置成功")
 
-    @commands.command()
-    @commands.has_permissions(administrator=True)
-    async def set_remove_ch(self, ctx, channel_id: int):
-        guild = ctx.guild
+    @commands.slash_command(description="設定成員離開訊息頻道", dm_permission=False)
+    @commands.default_member_permissions(administrator=True)
+    async def set_remove_ch(self, inter, channel_id: int = commands.Param(name="頻道id", large=True)):
+        guild = inter.guild
         answer = YesNoButton()
 
         if str(guild.id) in data:
+            def check(i: disnake.MessageInteraction):
+                return i.message.id == msg.id and i.author == inter.author
+
             if data[str(guild.id)]["member_remove_channel"] != "":
-                await ctx.send("此伺服器已經設定過成員離開通知頻道\n是否要重新設置(y/n)", view=answer)
+                await inter.response.send_message("此伺服器已經設定過成員離開通知頻道\n是否要重新設置(y/n)", view=answer)
+                msg = await inter.original_response()
+                await self.bot.wait_for(Event.button_click, check=check)
                 if not answer.value:
                     return
             data[str(guild.id)]["member_remove_channel"] = str(channel_id)
@@ -89,7 +100,10 @@ class Member(CogExtension):
             data[str(guild.id)] = {"member_join_channel": "", "member_remove_channel": ""}
             data[str(guild.id)]["member_remove_channel"] = str(channel_id)
             self.store_channel_data()
-        await ctx.send("設置成功")
+        if inter.response.is_done():
+            await inter.followup.send("設置成功")
+        else:
+            await inter.response.send_message("設置成功")
 
     @commands.Cog.listener()
     async def on_member_join(self, member):

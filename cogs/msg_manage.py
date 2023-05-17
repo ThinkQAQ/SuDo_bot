@@ -1,7 +1,7 @@
 import disnake
 from disnake.ext import commands, tasks
 from core.any import CogExtension
-from disnake import ui
+from disnake import ui, Event
 import json
 from datetime import datetime, timedelta, timezone
 from util.audit_var import AuditData
@@ -18,19 +18,19 @@ class YesNoButton(ui.View):
 
     @ui.button(label="Yes", style=disnake.ButtonStyle.green, custom_id="y")
     async def yes_callback(self, button: ui.Button, interaction: disnake.Interaction):
-        await interaction.response.send_message("確認更改")
         another_button = [x for x in self.children if x.custom_id == "n"][0]
         button.disabled = True
         another_button.disabled = True
         self.value = True
+        await interaction.response.send_message("確認更改")
 
     @ui.button(label="No", style=disnake.ButtonStyle.red, custom_id="n")
     async def no_callback(self, button: ui.Button, interaction: disnake.Interaction):
-        await interaction.response.send_message("確認取消")
         another_button = [x for x in self.children if x.custom_id == "y"][0]
         button.disabled = True
         another_button.disabled = True
         self.value = False
+        await interaction.response.send_message("確認取消")
 
 
 class MsgManage(CogExtension):
@@ -54,22 +54,27 @@ class MsgManage(CogExtension):
         # This is because overriding the default on_message forbids commands from running
         # await self.bot.process_commands(message)
 
-    @commands.command()
-    @commands.has_permissions(administrator=True)
-    async def clear(self, ctx, num: int):
+    @commands.slash_command(description="刪除N則訊息", dm_permission=False)
+    @commands.default_member_permissions(administrator=True)
+    async def clear(self, inter, num: int = commands.Param(name="n", ge=0)):
         self.bot_delete_edit = True
-        await ctx.channel.purge(limit=num + 1, bulk=True)  # 清除num+1則訊息
+        await inter.channel.purge(limit=num + 1, bulk=True)  # 清除num+1則訊息
         self.bot_delete_edit = False
 
-    @commands.command()
-    @commands.has_permissions(administrator=True)
-    async def set_msg_delete_ch(self, ctx, channel_id: int):
-        guild = ctx.guild
+    @commands.slash_command(description="設定訊息刪除紀錄頻道", dm_permission=False)
+    @commands.default_member_permissions(administrator=True)
+    async def set_msg_delete_ch(self, inter, channel_id: int = commands.Param(name="頻道id", large=True)):
+        guild = inter.guild
         answer = YesNoButton()
 
         if str(guild.id) in data:
+            def check(i: disnake.MessageInteraction):
+                return i.message.id == msg.id and i.author == inter.author
+
             if data[str(guild.id)]["msg_delete_channel_id"] != "":
-                await ctx.send("此伺服器已經設定過刪除訊息通知頻道\n是否要重新設置(y/n)", view=answer)
+                await inter.response.send_message("此伺服器已經設定過刪除訊息通知頻道\n是否要重新設置(y/n)", view=answer)
+                msg = await inter.original_response()
+                await self.bot.wait_for(Event.button_click, check=check)
                 if not answer.value:
                     return
             data[str(guild.id)]["msg_delete_channel_id"] = str(channel_id)
@@ -78,17 +83,25 @@ class MsgManage(CogExtension):
             data[str(guild.id)] = {"msg_edit_channel_id": "", "msg_delete_channel_id": ""}
             data[str(guild.id)]["msg_delete_channel_id"] = str(channel_id)
             self.store_channel_data()
-        await ctx.send("設置成功")
+        if inter.response.is_done():
+            await inter.followup.send("設置成功")
+        else:
+            await inter.response.send_message("設置成功")
 
-    @commands.command()
-    @commands.has_permissions(administrator=True)
-    async def set_msg_edit_ch(self, ctx, channel_id: int):
-        guild = ctx.guild
+    @commands.slash_command(description="設定訊息編輯紀錄頻道", dm_permission=False)
+    @commands.default_member_permissions(administrator=True)
+    async def set_msg_edit_ch(self, inter, channel_id: int = commands.Param(name="頻道id", large=True)):
+        guild = inter.guild
         answer = YesNoButton()
 
         if str(guild.id) in data:
+            def check(i: disnake.MessageInteraction):
+                return i.message.id == msg.id and i.author == inter.author
+
             if data[str(guild.id)]["msg_edit_channel_id"] != "":
-                await ctx.send("此伺服器已經設定過編輯訊息通知頻道\n是否要重新設置(y/n)", view=answer)
+                await inter.response.send_message("此伺服器已經設定過編輯訊息通知頻道\n是否要重新設置(y/n)", view=answer)
+                msg = await inter.original_response()
+                await self.bot.wait_for(Event.button_click, check=check)
                 if not answer.value:
                     return
             data[str(guild.id)]["msg_edit_channel_id"] = str(channel_id)
@@ -97,7 +110,10 @@ class MsgManage(CogExtension):
             data[str(guild.id)] = {"msg_edit_channel_id": "", "msg_delete_channel_id": ""}
             data[str(guild.id)]["msg_edit_channel_id"] = str(channel_id)
             self.store_channel_data()
-        await ctx.send("設置成功")
+        if inter.response.is_done():
+            await inter.followup.send("設置成功")
+        else:
+            await inter.response.send_message("設置成功")
 
     @commands.Cog.listener("on_raw_message_delete")
     async def msg_delete(self, payload: disnake.RawMessageDeleteEvent):
@@ -150,7 +166,7 @@ class MsgManage(CogExtension):
         edit_ch = data[str(payload.guild_id)]["msg_edit_channel_id"]
         if edit_ch == "" or edit_ch == str(payload.channel_id):
             return
-        if self.bot_delete_edit:
+        if self.bot_delete_edit or payload.cached_message.author == self.bot.user:
             return
         guild = self.bot.get_guild(payload.guild_id)
         channel_id = int(data[str(payload.guild_id)]["msg_edit_channel_id"])
@@ -173,6 +189,7 @@ class MsgManage(CogExtension):
                 AuditData.audit_data.pop(key)
 
     @commands.command()
+    @commands.is_owner()
     async def print_audit_data(self, ctx):
         await ctx.send(str(AuditData.audit_data))
 
