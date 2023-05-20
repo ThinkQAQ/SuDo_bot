@@ -2,11 +2,17 @@ import disnake
 from disnake.ext import commands
 from core.any import CogExtension
 import disnake.ext.commands.errors as err
+import traceback
+import json
+
+with open("json/setting.json", "r") as f:
+    debug = json.load(f)["debug"]
 
 
 class ErrorHandle(CogExtension):
     @commands.Cog.listener()
     async def on_command_error(self, ctx, error):
+        debug_ch = self.bot.get_guild(int(debug["debug_guild"])).get_channel(int(debug["debug_channel"]))
         if hasattr(ctx.command, "on_error"):    # 若該指令有自己的錯誤處理則不執行預設錯誤處理
             return
         if isinstance(error, err.MissingRequiredArgument):
@@ -16,10 +22,25 @@ class ErrorHandle(CogExtension):
         elif isinstance(error, err.MissingPermissions):
             await ctx.send("沒有權限使用這條指令")
         else:
-            await ctx.send("```diff\n-" + str(error) + "```")
+            err_msg = "".join(traceback.format_exception(error))
+            await debug_ch.send("```ps\n[\nAn error occurred in command " + ctx.command.name + "\n" + err_msg + "]```")
 
+    @commands.Cog.listener()
+    async def on_slash_command_error(self, inter, error):
+        debug_ch = self.bot.get_guild(int(debug["debug_guild"])).get_channel(int(debug["debug_channel"]))
+        if hasattr(inter.application_command, "on_error"):  # 若該指令有自己的錯誤處理則不執行預設錯誤處理
+            return
+        if isinstance(error, err.CommandOnCooldown):
+            pass
+        elif isinstance(error, err.BadArgument):
+            await inter.response.send_message("輸入參數有誤")
+        else:
+            err_msg = "".join(traceback.format_exception(error))
+            await debug_ch.send(
+                "```ps\n[\nAn error occurred in command " + inter.application_command.name + "\n" + err_msg + "]```"
+            )
     # @CMD_CLASS.CMD_NAME.error
-    # async def cmd_error(self, ctx, error):
+    # async def cmd_error(self, ctx/inter, error):
 
 
 def setup(bot):
