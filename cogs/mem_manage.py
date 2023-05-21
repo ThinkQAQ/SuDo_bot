@@ -21,7 +21,10 @@ class MemManage(CogExtension):
             return
         guild = inter.guild
         duration = timedelta(days=days, hours=hours, minutes=minutes, seconds=seconds)
-        await member.send(f"你在 {guild.name} 已被禁言{days}天{hours}時{minutes}分{seconds}秒, 原因:{reason}")
+        try:
+            await member.send(f"你在 {guild.name} 已被禁言{days}天{hours}時{minutes}分{seconds}秒, 原因:{reason}")
+        except:
+            pass
         await inter.response.send_message(
             f"成員 <@{member.id}> 已被禁言{days}天{hours}時{minutes}分{seconds}秒, 原因:{reason}")
         await guild.timeout(user=member, duration=duration, reason=reason)
@@ -37,7 +40,10 @@ class MemManage(CogExtension):
             await inter.response.send_message("你沒有權限將此成員踢出伺服器")
             return
         guild = inter.guild
-        await member.send(f"你已被踢出 {guild.name} , 原因:{reason}")
+        try:
+            await member.send(f"你已被踢出 {guild.name} , 原因:{reason}")
+        except:
+            pass
         await inter.response.send_message(f"成員 <@{member.id}> 已被踢出伺服器, 原因:{reason}")
         await guild.kick(user=member, reason=reason)
 
@@ -46,16 +52,21 @@ class MemManage(CogExtension):
     async def ban(
             self, inter,
             member: disnake.Member = commands.Param(name="成員"),
-            duration: commands.Range[0, 7] = commands.Param(name="刪除訊息", description="是否刪除該用戶所發送的訊息, 此參數為刪除幾天的訊息, 預設不刪除訊息", default=0),
+            duration: commands.Range[0, 7] = commands.Param(name="刪除訊息",
+                                                            description="是否刪除該用戶所發送的訊息, 此參數為刪除幾天的訊息, 預設不刪除訊息",
+                                                            default=0),
             reason: str = commands.Param(name="原因", default="沒有提供原因")
     ):
         if member.guild_permissions.administrator or member.guild_permissions.ban_members:
             await inter.response.send_message("你沒有權限停權此成員")
             return
         guild = inter.guild
-        await member.send(f"你在 {guild.name} 已被停權, 原因:{reason}")
+        try:
+            await member.send(f"你在 {guild.name} 已被停權, 原因:{reason}")
+        except:
+            pass
         await inter.response.send_message(f"成員 <@{member.id}> 已被停權, 原因:{reason}")
-        await guild.ban(user=member, clean_history_duration=duration, reason=reason)
+        await guild.ban(user=member, clean_history_duration=int(duration * 86400), reason=reason)
 
     @commands.slash_command(description="在此伺服器解除成員停權", dm_permission=False)
     @commands.default_member_permissions(ban_members=True)

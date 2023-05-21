@@ -4,6 +4,8 @@ from core.any import CogExtension
 import disnake.ext.commands.errors as err
 import traceback
 import json
+from datetime import datetime
+import os
 
 with open("json/setting.json", "r") as f:
     debug = json.load(f)["debug"]
@@ -36,9 +38,17 @@ class ErrorHandle(CogExtension):
             await inter.response.send_message("輸入參數有誤")
         else:
             err_msg = "".join(traceback.format_exception(error))
-            await debug_ch.send(
-                "```ps\n[\nAn error occurred in command " + inter.application_command.name + "\n" + err_msg + "]```"
-            )
+            if len(err_msg) > 1900:
+                err_file_name = f"error_{datetime.strftime(datetime.now(), '%Y_%m_%d_%H_%M_%S')}.txt"
+                with open(err_file_name, "w", encoding="UTF-8") as err_file:
+                    err_file.write(err_msg)
+                with open(err_file_name, "rb") as err_file:
+                    await debug_ch.send(file=disnake.File(err_file))
+                os.remove(f"./{err_file_name}")
+            else:
+                await debug_ch.send(
+                    "```ps\n[\nAn error occurred in command " + inter.application_command.name + "\n" + err_msg + "]```"
+                )
     # @CMD_CLASS.CMD_NAME.error
     # async def cmd_error(self, ctx/inter, error):
 
