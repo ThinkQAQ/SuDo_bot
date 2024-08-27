@@ -8,14 +8,46 @@ from datetime import datetime
 import os
 
 with open("json/setting.json", "r") as f:
-    debug = json.load(f)["debug"]
+    data = json.load(f)
+    if "debug" in data:
+        debug = data["debug"]
+    else:
+        debug = 0
 
 
 class ErrorHandle(CogExtension):
+    @staticmethod
+    def store_channel_data():
+        with open("json/setting.json", "w") as file:
+            json.dump(data, file, indent=4)
+
+    @commands.slash_command(description="設定debug頻道")
+    @commands.is_owner()
+    async def set_debug_ch(self, inter,
+                           guild_id: int = commands.Param(name="伺服器id", large=True),
+                           channel_id: int = commands.Param(name="頻道id", large=True)
+                           ):
+        guild = self.bot.get_guild(guild_id)
+
+        if guild is None:
+            await inter.response.send_message("找不到伺服器")
+            return
+        if guild.get_channel(channel_id) is None:
+            await inter.response.send_message("找不到頻道")
+            return
+
+        data["debug"] = {"debug_guild": str(guild_id), "debug_channel": str(channel_id)}
+        global debug
+        debug = data["debug"]
+        self.store_channel_data()
+        await inter.response.send_message("設置成功")
+
     @commands.Cog.listener()
     async def on_command_error(self, ctx, error):
+        if debug == 0:
+            return
         debug_ch = self.bot.get_guild(int(debug["debug_guild"])).get_channel(int(debug["debug_channel"]))
-        if hasattr(ctx.command, "on_error"):    # 若該指令有自己的錯誤處理則不執行預設錯誤處理
+        if hasattr(ctx.command, "on_error"):  # 若該指令有自己的錯誤處理則不執行預設錯誤處理
             return
         if isinstance(error, err.MissingRequiredArgument):
             await ctx.send("缺少參數,可以用help確認用法")
@@ -29,6 +61,8 @@ class ErrorHandle(CogExtension):
 
     @commands.Cog.listener()
     async def on_slash_command_error(self, inter, error):
+        if debug == 0:
+            return
         debug_ch = self.bot.get_guild(int(debug["debug_guild"])).get_channel(int(debug["debug_channel"]))
         if hasattr(inter.application_command, "on_error"):  # 若該指令有自己的錯誤處理則不執行預設錯誤處理
             return
