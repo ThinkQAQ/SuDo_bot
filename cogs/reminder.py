@@ -68,10 +68,22 @@ class Reminder(CogExtension):
         # embed.set_author(name=self.bot.user.name, icon_url=self.bot.user.avatar.url)
         embed.add_field(name="共" + str(len(qu)) + "個提醒", value="", inline=True)
         for e in qu:
-            embed.add_field(name="", value=e[0], inline=False)
+            embed.add_field(name=e[0], value="<t:" + e[1] + ":f>(<t:" + e[1] + ":R>)", inline=False)
         embed.set_footer(text="\u200b")
         embed.timestamp = timestamp
         await inter.response.send_message(content="<@" + str(e[3]) + ">", embed=embed)
+
+    @commands.slash_command(description="刪除已設置的提醒", dm_permission=False)
+    async def remove_reminder(self, inter, name):
+        for e in qu:
+            if name in e:
+                qu.remove(e)
+                if len(qu) == 0:
+                    self.time_check.cancel()
+                self.store_timer_data()
+                await inter.response.send_message("刪除成功")
+                return
+        await inter.response.send_message("未找到該則提醒")
 
 
 def setup(bot):
